@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luma Bistro — Voice Host</title>
+  <style>
+    :root {
+      --bg0: #1a1410;
+      --bg1: #2c2118;
+      --ink: #f4ebe1;
+      --muted: #b9a99a;
+      --accent: #c45c26;
+      --ok: #3d8b6e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, #3a2a1c 0%, transparent 55%),
+        radial-gradient(ellipse 70% 50% at 90% 80%, #1f2a24 0%, transparent 50%),
+        linear-gradient(160deg, var(--bg0), var(--bg1));
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+    }
+    main {
+      width: min(420px, 100%);
+      text-align: center;
+    }
+    h1 {
+      font-weight: 600;
+      font-size: clamp(2rem, 6vw, 2.75rem);
+      letter-spacing: 0.02em;
+      margin: 0 0 0.35rem;
+    }
+    p {
+      color: var(--muted);
+      margin: 0 0 1.75rem;
+      line-height: 1.45;
+      font-size: 1.05rem;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.95rem 1.75rem;
+      font: inherit;
+      font-size: 1.05rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff8f2;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    button.connected { background: var(--ok); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #status {
+      margin-top: 1.25rem;
+      min-height: 1.5rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    #remoteAudio {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Luma Bistro</h1>
+    <p>Talk with the host to book, change, or cancel a table.</p>
+    <button id="callBtn" type="button">Start conversation</button>
+    <div id="status">Ready</div>
+  </main>
+  <div id="remoteAudio"></div>
+
+  <script type="module">
+    import { Room, RoomEvent, Track, createLocalAudioTrack } from "https://cdn.jsdelivr.net/npm/livekit-client@2.9.1/+esm";
+
+    const btn = document.getElementById("callBtn");
+    const status = document.getElementById("status");
+    const remoteAudio = document.getElementById("remoteAudio");
+    let room = null;
+
+    function setStatus(text) {
+      status.textContent = text;
+    }
+
+    function attachAudioTrack(track) {
+      if (track.kind !== Track.Kind.Audio && track.kind !== "audio") return;
+      const el = track.attach();
+      el.autoplay = true;
+      el.playsInline = true;
+      el.muted = false;
+      el.volume = 1.0;
+      remoteAudio.appendChild(el);
+      el.play().catch((err) => {
+        console.warn("audio play blocked", err);
+        setStatus("Click the page once if you don't hear audio (browser autoplay)");
+      });
+    }
+
+    async function connect() {
+      btn.disabled = true;
+      setStatus("Connecting…");
+      remoteAudio.innerHTML = "";
+      const roomName = `luma-${Date.now()}`;
+      const res = await fetch("/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_name: roomName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Token request failed");
+      }
+      const { token, url } = await res.json();
+      room = new Room({ adaptiveStream: true, dynacast: true });
+
+      room.on(RoomEvent.TrackSubscribed, (track) => attachAudioTrack(track));
+      room.on(RoomEvent.ParticipantConnected, (p) => {
+        setStatus(`Agent joined (${p.identity}) — listening…`);
+      });
+      room.on(RoomEvent.Disconnected, () => {
+        btn.textContent = "Start conversation";
+        btn.classList.remove("connected");
+        btn.disabled = false;
+        setStatus("Disconnected");
+        room = null;
+      });
+
+      await room.connect(url, token);
+      // Attach any already-subscribed remote audio tracks
+      room.remoteParticipants.forEach((p) => {
+        p.audioTrackPublications.forEach((pub) => {
+          if (pub.track) attachAudioTrack(pub.track);
+        });
+      });
+
+      const mic = await createLocalAudioTrack({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      });
+      await room.localParticipant.publishTrack(mic);
+      btn.textContent = "End conversation";
+      btn.classList.add("connected");
+      btn.disabled = false;
+      setStatus("Connected — waiting for host greeting…");
+    }
+
+    async function disconnect() {
+      if (room) {
+        await room.disconnect();
+        room = null;
+      }
+      remoteAudio.innerHTML = "";
+    }
+
+    btn.addEventListener("click", async () => {
+      try {
+        if (room) await disconnect();
+        else await connect();
+      } catch (e) {
+        console.error(e);
+        setStatus(e.message || String(e));
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Secrets and local env — never commit
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs & runtime
+logs/
+*.log
+*.jsonl
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Node (web client)
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Test / demo artifacts
+recordings/
+demo/
+*.mp4
+*.webm
