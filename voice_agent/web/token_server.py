@@ -15,11 +15,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from livekit.api import AccessToken, VideoGrants
+from livekit.api import AccessToken, RoomAgentDispatch, RoomConfiguration, VideoGrants
 from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env", override=False)
+
+AGENT_NAME = "Jawwad"
 
 app = FastAPI(title="Luma Bistro Voice Demo")
 WEB = Path(__file__).resolve().parent
@@ -67,6 +69,11 @@ def create_token(body: TokenRequest):
                 can_subscribe=True,
             )
         )
+        .with_room_config(
+            RoomConfiguration(
+                agents=[RoomAgentDispatch(agent_name=AGENT_NAME)]
+            )
+        )
         .with_ttl(timedelta(seconds=ttl))
         .to_jwt()
     )
@@ -75,6 +82,7 @@ def create_token(body: TokenRequest):
         "url": url,
         "room_name": body.room_name,
         "identity": identity,
+        "agent_name": AGENT_NAME,
     }
 
 

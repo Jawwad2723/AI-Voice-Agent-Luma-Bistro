@@ -24,6 +24,8 @@ from .reservation_client import ReservationClient
 from .session_state import SessionState
 from .tools import build_tools
 
+AGENT_NAME = "Jawwad"
+
 
 async def entrypoint(ctx: JobContext) -> None:
     settings = get_settings(require_voice_secrets=True)
@@ -41,8 +43,9 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     log.info(
-        "session_start id=%s room=%s participant=%s api=%s model=%s",
+        "session_start id=%s agent=%s room=%s participant=%s api=%s model=%s",
         session_id,
+        AGENT_NAME,
         ctx.room.name,
         participant.identity,
         settings.reservation_api_base_url,
@@ -53,6 +56,7 @@ async def entrypoint(ctx: JobContext) -> None:
         room=ctx.room.name,
         channel=state.channel,
         participant=participant.identity,
+        agent=AGENT_NAME,
         llm="deepseek",
     )
 
@@ -84,11 +88,12 @@ async def entrypoint(ctx: JobContext) -> None:
         tools=tools,
     )
 
-    await session.start(agent=agent, room=ctx.room)
+    # record=False: ignore LiveKit Cloud enable_recording (no local/cloud session audio record)
+    await session.start(agent=agent, room=ctx.room, record=False)
 
     await session.generate_reply(
         instructions=(
-            "Greet the caller briefly as Luma Bistro's host. "
+            f"Greet the caller briefly as, Luma Bistro's host. "
             "Offer to help with a new reservation, changing one, or cancelling."
         )
     )
@@ -101,5 +106,6 @@ async def entrypoint(ctx: JobContext) -> None:
 
 if __name__ == "__main__":
     # Worker reads LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET from env.
+    # agent_name enables explicit dispatch (token must request this name).
     get_settings(require_voice_secrets=True)
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name=AGENT_NAME))
