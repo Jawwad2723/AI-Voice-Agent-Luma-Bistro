@@ -2,7 +2,7 @@
 
 Real-time voice host for Luma Bistro reservations.
 
-**Stack:** LiveKit Agents · Deepgram STT · Gemini Flash · ElevenLabs TTS · browser WebRTC (+ Twilio later)
+**Stack:** LiveKit Agents · Deepgram STT · DeepSeek · ElevenLabs TTS · browser WebRTC (+ Twilio later)
 
 ## Secrets (.env)
 
@@ -11,7 +11,7 @@ All API keys and tokens live in `voice_agent/.env`. Never commit this file.
 ```bash
 cd voice_agent
 cp .env.example .env
-# Edit .env and set real values for LIVEKIT_*, DEEPGRAM_*, GOOGLE_API_KEY, ELEVEN_*, TWILIO_*
+# Edit .env and set real values for LIVEKIT_*, DEEPGRAM_*, DEEPSEEK_*, ELEVEN_*, TWILIO_*
 ```
 
 | Variable | Purpose |
@@ -19,7 +19,7 @@ cp .env.example .env
 | `RESERVATION_API_BASE_URL` | Mock API (default `http://localhost:8000`) |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud |
 | `DEEPGRAM_API_KEY` | Streaming STT |
-| `GOOGLE_API_KEY` | Gemini LLM |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | DeepSeek LLM |
 | `ELEVEN_API_KEY` / `ELEVEN_VOICE_ID` | Streaming TTS |
 | `TWILIO_*` | Phone ingress (Phase 5) |
 

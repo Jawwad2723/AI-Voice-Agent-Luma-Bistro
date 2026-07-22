@@ -8,7 +8,7 @@ pytest-asyncio>=0.23.0
 cryptography>=42,<45
 
 # LiveKit voice agent
-livekit-agents[silero,deepgram,google,elevenlabs]~=1.0
+livekit-agents[silero,deepgram,openai,elevenlabs]~=1.0
 livekit-api>=1.0.0
 
 # Optional: local token server for browser client

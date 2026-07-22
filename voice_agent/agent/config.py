@@ -40,8 +40,9 @@ class Settings:
     livekit_api_secret: str
     livekit_token_ttl_seconds: int
     deepgram_api_key: str
-    google_api_key: str
-    gemini_model: str
+    deepseek_api_key: str
+    deepseek_model: str
+    deepseek_base_url: str
     eleven_api_key: str
     eleven_voice_id: str
     eleven_model_id: str
@@ -64,7 +65,7 @@ def get_settings(*, require_voice_secrets: bool = True) -> Settings:
     Load settings from .env / environment.
 
     require_voice_secrets=False is for unit tests that only need the
-    reservation API (no LiveKit/Deepgram/Gemini/ElevenLabs/Twilio keys).
+    reservation API (no LiveKit/Deepgram/DeepSeek/ElevenLabs/Twilio keys).
     """
     _load_dotenv()
 
@@ -77,13 +78,7 @@ def get_settings(*, require_voice_secrets: bool = True) -> Settings:
         livekit_api_key = _require("LIVEKIT_API_KEY")
         livekit_api_secret = _require("LIVEKIT_API_SECRET")
         deepgram_api_key = _require("DEEPGRAM_API_KEY")
-        google_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
-        if not google_api_key.strip() or google_api_key.strip().startswith("your_"):
-            raise RuntimeError(
-                "Missing GOOGLE_API_KEY (or GEMINI_API_KEY). "
-                f"Set it in {_ENV_PATH}."
-            )
-        google_api_key = google_api_key.strip()
+        deepseek_api_key = _require("DEEPSEEK_API_KEY")
         eleven_api_key = _require("ELEVEN_API_KEY")
         # Twilio required for phone path; allow placeholders until Phase 5
         twilio_account_sid = _optional("TWILIO_ACCOUNT_SID")
@@ -94,7 +89,7 @@ def get_settings(*, require_voice_secrets: bool = True) -> Settings:
         livekit_api_key = _optional("LIVEKIT_API_KEY")
         livekit_api_secret = _optional("LIVEKIT_API_SECRET")
         deepgram_api_key = _optional("DEEPGRAM_API_KEY")
-        google_api_key = _optional("GOOGLE_API_KEY") or _optional("GEMINI_API_KEY")
+        deepseek_api_key = _optional("DEEPSEEK_API_KEY")
         eleven_api_key = _optional("ELEVEN_API_KEY")
         twilio_account_sid = _optional("TWILIO_ACCOUNT_SID")
         twilio_auth_token = _optional("TWILIO_AUTH_TOKEN")
@@ -111,8 +106,11 @@ def get_settings(*, require_voice_secrets: bool = True) -> Settings:
         livekit_api_secret=livekit_api_secret,
         livekit_token_ttl_seconds=int(_optional("LIVEKIT_TOKEN_TTL_SECONDS", "3600")),
         deepgram_api_key=deepgram_api_key,
-        google_api_key=google_api_key,
-        gemini_model=_optional("GEMINI_MODEL", "gemini-3-flash-preview"),
+        deepseek_api_key=deepseek_api_key,
+        deepseek_model=_optional("DEEPSEEK_MODEL", "deepseek-chat"),
+        deepseek_base_url=_optional(
+            "DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"
+        ),
         eleven_api_key=eleven_api_key,
         eleven_voice_id=_optional("ELEVEN_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
         eleven_model_id=_optional("ELEVEN_MODEL_ID", "eleven_turbo_v2_5"),

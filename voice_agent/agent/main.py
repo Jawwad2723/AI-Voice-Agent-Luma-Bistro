@@ -15,7 +15,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
 )
-from livekit.plugins import deepgram, elevenlabs, google, silero
+from livekit.plugins import deepgram, elevenlabs, openai, silero
 
 from .config import get_settings
 from .metrics import Metrics, setup_logging
@@ -46,13 +46,14 @@ async def entrypoint(ctx: JobContext) -> None:
         ctx.room.name,
         participant.identity,
         settings.reservation_api_base_url,
-        settings.gemini_model,
+        settings.deepseek_model,
     )
     metrics.emit(
         "session_start",
         room=ctx.room.name,
         channel=state.channel,
         participant=participant.identity,
+        llm="deepseek",
     )
 
     tools = build_tools(client)
@@ -65,9 +66,10 @@ async def entrypoint(ctx: JobContext) -> None:
             smart_format=True,
             numerals=True,
         ),
-        llm=google.LLM(
-            model=settings.gemini_model,
-            api_key=settings.google_api_key,
+        llm=openai.LLM.with_deepseek(
+            model=settings.deepseek_model,
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
         ),
         tts=elevenlabs.TTS(
             voice_id=settings.eleven_voice_id,
