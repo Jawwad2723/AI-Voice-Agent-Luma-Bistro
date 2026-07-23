@@ -18,7 +18,7 @@ from livekit.agents import (
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 
 from .config import get_settings
-from .metrics import Metrics, setup_logging
+from .metrics import Metrics, highlight, setup_logging
 from .prompts import SYSTEM_PROMPT
 from .reservation_client import ReservationClient
 from .session_state import SessionState
@@ -29,6 +29,7 @@ AGENT_NAME = "Jawwad"
 
 async def entrypoint(ctx: JobContext) -> None:
     settings = get_settings(require_voice_secrets=True)
+    # Re-apply after LiveKit CLI configures its own loggers
     log = setup_logging(settings.log_level, settings.log_dir)
 
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
@@ -40,17 +41,16 @@ async def entrypoint(ctx: JobContext) -> None:
     client = ReservationClient(
         settings.reservation_api_base_url,
         availability_max_retries=settings.availability_max_retries,
+        on_latency=metrics.note_api_latency,
     )
 
-    log.info(
-        "session_start id=%s agent=%s room=%s participant=%s api=%s model=%s",
-        session_id,
-        AGENT_NAME,
-        ctx.room.name,
-        participant.identity,
-        settings.reservation_api_base_url,
-        settings.deepseek_model,
-    )
+    highlight("─" * 48)
+    highlight(f"session  {session_id}  agent={AGENT_NAME}  room={ctx.room.name}")
+    highlight(f"caller   {participant.identity}")
+    highlight(f"api      {settings.reservation_api_base_url}")
+    highlight(f"llm      deepseek/{settings.deepseek_model}")
+    highlight("─" * 48)
+
     metrics.emit(
         "session_start",
         room=ctx.room.name,
@@ -81,6 +81,9 @@ async def entrypoint(ctx: JobContext) -> None:
             api_key=settings.eleven_api_key,
         ),
         userdata=state,
+        # Explicit barge-in for T3 (works in both `dev` and `start`)
+        allow_interruptions=True,
+        min_interruption_duration=0.4,
     )
 
     agent = Agent(
@@ -88,23 +91,59 @@ async def entrypoint(ctx: JobContext) -> None:
         tools=tools,
     )
 
-    # record=False: ignore LiveKit Cloud enable_recording (no local/cloud session audio record)
+    @session.on("conversation_item_added")
+    def _on_item(ev) -> None:
+        item = getattr(ev, "item", None)
+        if item is None or getattr(item, "type", None) != "message":
+            return
+        report = dict(getattr(item, "metrics", None) or {})
+        role = getattr(item, "role", None)
+        text = getattr(item, "text_content", None)
+        if role == "user":
+            metrics.on_user_message(report, text=text)
+        elif role == "assistant":
+            metrics.on_assistant_message(report)
+
+    @session.on("metrics_collected")
+    def _on_metrics(ev) -> None:
+        # Deprecated path kept as a fallback; primary latency is ChatMessage.metrics
+        m = getattr(ev, "metrics", None)
+        if m is not None:
+            metrics.on_metrics(m)
+
+    @session.on("function_tools_executed")
+    def _on_tools(ev) -> None:
+        calls = getattr(ev, "function_calls", None) or []
+        for call in calls:
+            name = getattr(call, "name", None) or getattr(call, "function_info", None)
+            if hasattr(name, "name"):
+                name = name.name
+            highlight(f"tool  {name or 'unknown'}")
+
+    # record=False: ignore LiveKit Cloud enable_recording
     await session.start(agent=agent, room=ctx.room, record=False)
 
     await session.generate_reply(
         instructions=(
-            f"Greet the caller briefly as, Luma Bistro's host. "
-            "Offer to help with a new reservation, changing one, or cancelling."
+            "Greet the caller briefly as the host from Luma Bistro. "
+            "Introduce yourself from Luma Bistro, then ask how you can help. "
+            "Do not list booking, changing, or cancelling as options."
         )
     )
 
     @ctx.room.on("disconnected")
     def _on_disconnected(*_args, **_kwargs):
-        metrics.emit("session_end", summary=state.summary())
+        summary = metrics.summary_line()
+        metrics.emit("session_end", summary=state.summary(), latency=summary)
+        highlight("─" * 48)
+        highlight(f"ended  {summary}")
+        highlight("─" * 48)
         log.info("session_end id=%s", session_id)
 
 
 if __name__ == "__main__":
+    # Quiet noisy loggers before the CLI takes over
+    setup_logging("INFO")
     # Worker reads LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET from env.
     # agent_name enables explicit dispatch (token must request this name).
     get_settings(require_voice_secrets=True)

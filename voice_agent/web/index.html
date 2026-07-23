@@ -12,6 +12,7 @@
       --muted: #b9a99a;
       --accent: #c45c26;
       --ok: #3d8b6e;
+      --bad: #c44b3a;
     }
     * { box-sizing: border-box; }
     body {
@@ -63,7 +64,9 @@
       min-height: 1.5rem;
       font-size: 0.95rem;
       color: var(--muted);
+      white-space: pre-wrap;
     }
+    #status.error { color: var(--bad); }
     #remoteAudio {
       position: absolute;
       width: 0;
@@ -90,8 +93,13 @@
     const remoteAudio = document.getElementById("remoteAudio");
     let room = null;
 
-    function setStatus(text) {
+    function setStatus(text, isError = false) {
       status.textContent = text;
+      status.classList.toggle("error", isError);
+    }
+
+    function micAvailable() {
+      return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
     }
 
     function attachAudioTrack(track) {
@@ -102,16 +110,30 @@
       el.muted = false;
       el.volume = 1.0;
       remoteAudio.appendChild(el);
-      el.play().catch((err) => {
-        console.warn("audio play blocked", err);
+      el.play().catch(() => {
         setStatus("Click the page once if you don't hear audio (browser autoplay)");
       });
     }
 
     async function connect() {
+      if (!micAvailable()) {
+        throw new Error(
+          "Mic blocked: open http://127.0.0.1:8080 or http://localhost:8080 (not 0.0.0.0 / LAN IP). Browsers only expose the mic on localhost or HTTPS."
+        );
+      }
+
       btn.disabled = true;
-      setStatus("Connecting…");
+      setStatus("Requesting microphone…");
       remoteAudio.innerHTML = "";
+
+      // Ask for mic first so we fail before creating a LiveKit room/job
+      const mic = await createLocalAudioTrack({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      });
+
+      setStatus("Connecting…");
       const roomName = `luma-${Date.now()}`;
       const res = await fetch("/api/token", {
         method: "POST",
@@ -119,6 +141,7 @@
         body: JSON.stringify({ room_name: roomName }),
       });
       if (!res.ok) {
+        mic.stop();
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Token request failed");
       }
@@ -138,23 +161,17 @@
       });
 
       await room.connect(url, token);
-      // Attach any already-subscribed remote audio tracks
       room.remoteParticipants.forEach((p) => {
         p.audioTrackPublications.forEach((pub) => {
           if (pub.track) attachAudioTrack(pub.track);
         });
       });
 
-      const mic = await createLocalAudioTrack({
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      });
       await room.localParticipant.publishTrack(mic);
       btn.textContent = "End conversation";
       btn.classList.add("connected");
       btn.disabled = false;
-      setStatus("Connected — waiting for host greeting…");
+      setStatus("Connected — mic on. Waiting for host greeting…");
     }
 
     async function disconnect() {
@@ -171,10 +188,26 @@
         else await connect();
       } catch (e) {
         console.error(e);
-        setStatus(e.message || String(e));
+        const msg = e?.message || String(e);
+        if (/getUserMedia|NotAllowedError|Permission|mediaDevices/i.test(msg)) {
+          setStatus(
+            "Microphone failed. Allow mic permission, then open exactly:\nhttp://127.0.0.1:8080",
+            true
+          );
+        } else {
+          setStatus(msg, true);
+        }
         btn.disabled = false;
       }
     });
+
+    if (!micAvailable()) {
+      setStatus(
+        "Mic unavailable here. Open http://127.0.0.1:8080 (not 0.0.0.0 / LAN IP).",
+        true
+      );
+      btn.disabled = true;
+    }
   </script>
 </body>
 </html>

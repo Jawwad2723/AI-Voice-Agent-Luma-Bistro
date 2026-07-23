@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated, Optional
 
 from livekit.agents import RunContext, function_tool
 from pydantic import Field
 
+from .metrics import highlight
 from .reservation_client import (
     ReservationAPIError,
     ReservationClient,
     make_idempotency_key,
 )
 from .session_state import SessionState
-from .validation import ValidationError, normalize_phone, validate_create_fields
-
-logger = logging.getLogger("luma.tools")
+from .validation import (
+    ValidationError,
+    normalize_date,
+    normalize_phone,
+    normalize_time,
+    validate_create_fields,
+    validate_open_hours,
+    validate_party_size,
+)
 
 
 def build_tools(client: ReservationClient):
@@ -46,13 +52,6 @@ def build_tools(client: ReservationClient):
         party_size: Annotated[int, Field(description="Party size 1-8")],
     ) -> dict:
         """Check if a date/time is available for the party size. Retries once on temporary failure."""
-        from .validation import (
-            normalize_date,
-            normalize_time,
-            validate_open_hours,
-            validate_party_size,
-        )
-
         state: SessionState = context.userdata
         try:
             date_n = normalize_date(date)
@@ -60,6 +59,7 @@ def build_tools(client: ReservationClient):
             party = validate_party_size(party_size)
             validate_open_hours(date_n, time_n)
         except ValidationError as e:
+            highlight(f"tool  check_availability rejected  {e.code}")
             if e.code == "PARTY_TOO_LARGE":
                 return {
                     "ok": False,
@@ -156,7 +156,6 @@ def build_tools(client: ReservationClient):
             return {"ok": False, "code": e.code, "message": str(e)}
 
         key = make_idempotency_key(
-            session_id=state.session_id,
             name=fields["name"],
             phone=fields["phone"],
             date=fields["date"],
@@ -200,6 +199,10 @@ def build_tools(client: ReservationClient):
             "party_size": result.get("party_size"),
             "status": result.get("status"),
             "idempotency_key": key,
+            "message": (
+                "Idempotent create: same name/phone/date/time/party always maps to one reservation. "
+                "Speak the confirmation code; if they booked these details before, it is the same booking."
+            ),
         }
 
     @function_tool()
@@ -267,11 +270,20 @@ def build_tools(client: ReservationClient):
                 "message": "Confirm changes with the caller, then confirm_pending_write('modify').",
             }
         try:
+            date_n = normalize_date(date) if date else None
+            time_n = normalize_time(time) if time else None
+            party_n = validate_party_size(party_size) if party_size is not None else None
+            if date_n and time_n:
+                validate_open_hours(date_n, time_n)
+        except ValidationError as e:
+            highlight(f"tool  update_reservation rejected  {e.code}")
+            return {"ok": False, "code": e.code, "message": str(e)}
+        try:
             result = await client.update_reservation(
                 reservation_id,
-                date=date,
-                time=time,
-                party_size=party_size,
+                date=date_n,
+                time=time_n,
+                party_size=party_n,
                 notes=notes,
             )
         except ReservationAPIError as e:

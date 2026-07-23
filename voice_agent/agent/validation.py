@@ -8,8 +8,6 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("America/Los_Angeles")
-OPEN_DAYS = {1, 2, 3, 4, 5, 6}  # Tue=1 ... Sun=6 (Mon=0 closed) if using weekday()
-# Python weekday(): Mon=0 ... Sun=6 → open Tue-Sun => {1,2,3,4,5,6}
 MAX_PARTY = 8
 SLOT_MINUTES = 30
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
@@ -87,7 +85,6 @@ def normalize_date(value: str) -> str:
     if DATE_RE.match(raw):
         datetime.strptime(raw, "%Y-%m-%d")
         return raw
-    # Accept common spoken forms if already ISO-like after STT
     for fmt in ("%B %d, %Y", "%b %d, %Y", "%m/%d/%Y", "%m-%d-%Y"):
         try:
             return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")

@@ -35,7 +35,6 @@ async def test_create_available(client: ReservationClient):
     )
     assert avail["available"] is True
     key = make_idempotency_key(
-        session_id="t1",
         name="Jordan Lee",
         phone="+13105550199",
         date="2026-08-14",
@@ -98,7 +97,6 @@ async def test_availability_503_retries_once(client: ReservationClient):
 @pytest.mark.asyncio
 async def test_idempotency_duplicate_protection(client: ReservationClient):
     key = make_idempotency_key(
-        session_id="t7",
         name="Morgan Reed",
         phone="+13105550166",
         date="2026-08-14",

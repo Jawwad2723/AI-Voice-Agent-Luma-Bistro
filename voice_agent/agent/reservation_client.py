@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import time as time_mod
+from collections.abc import Callable
 from typing import Any, Optional
 
 import httpx
 
-logger = logging.getLogger(__name__)
+LatencyCallback = Callable[..., None]
 
 
 class ReservationAPIError(Exception):
@@ -31,14 +31,14 @@ class ReservationAPIError(Exception):
 
 def make_idempotency_key(
     *,
-    session_id: str,
     name: str,
     phone: str,
     date: str,
     time: str,
     party_size: int,
 ) -> str:
-    raw = f"{session_id}|{name}|{phone}|{date}|{time}|{party_size}"
+    """Stable key from booking fields only — same guest/slot → same key across calls."""
+    raw = f"{name.strip().lower()}|{phone}|{date}|{time}|{party_size}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -49,10 +49,16 @@ class ReservationClient:
         *,
         availability_max_retries: int = 1,
         timeout: float = 10.0,
+        on_latency: Optional[LatencyCallback] = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.availability_max_retries = availability_max_retries
+        self._on_latency = on_latency
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout)
+
+    def _report(self, name: str, latency_ms: float, **extra: Any) -> None:
+        if self._on_latency:
+            self._on_latency(name, round(latency_ms, 1), **extra)
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -91,6 +97,7 @@ class ReservationClient:
             raise self._parse_error(resp)
         data = resp.json()
         data["_latency_ms"] = round(latency_ms, 1)
+        self._report("get_restaurant", latency_ms)
         return data
 
     async def check_availability(
@@ -100,6 +107,7 @@ class ReservationClient:
         attempts = 0
         max_attempts = 1 + max(0, self.availability_max_retries)
         last_error: Optional[ReservationAPIError] = None
+        total_ms = 0.0
 
         while attempts < max_attempts:
             attempts += 1
@@ -109,14 +117,7 @@ class ReservationClient:
                 params={"date": date, "time": time, "party_size": party_size},
             )
             latency_ms = (time_mod.perf_counter() - t0) * 1000
-            logger.info(
-                "availability attempt=%s status=%s latency_ms=%.1f date=%s time=%s",
-                attempts,
-                resp.status_code,
-                latency_ms,
-                date,
-                time,
-            )
+            total_ms += latency_ms
             if resp.status_code == 503:
                 err = self._parse_error(resp)
                 last_error = err
@@ -124,12 +125,28 @@ class ReservationClient:
                     wait_ms = err.retry_after_ms or 500
                     await asyncio.sleep(wait_ms / 1000)
                     continue
+                self._report(
+                    "check_availability",
+                    total_ms,
+                    status=503,
+                    attempts=attempts,
+                    date=date,
+                    time=time,
+                )
                 raise err
             if resp.status_code >= 400:
                 raise self._parse_error(resp)
             data = resp.json()
-            data["_latency_ms"] = round(latency_ms, 1)
+            data["_latency_ms"] = round(total_ms, 1)
             data["_attempts"] = attempts
+            self._report(
+                "check_availability",
+                total_ms,
+                available=data.get("available"),
+                attempts=attempts,
+                date=date,
+                time=time,
+            )
             return data
 
         assert last_error is not None
@@ -161,16 +178,18 @@ class ReservationClient:
             headers={"Idempotency-Key": idempotency_key},
         )
         latency_ms = (time_mod.perf_counter() - t0) * 1000
-        logger.info(
-            "create_reservation status=%s latency_ms=%.1f key=%s...",
-            resp.status_code,
-            latency_ms,
-            idempotency_key[:12],
-        )
         if resp.status_code >= 400:
+            self._report("create_reservation", latency_ms, status=resp.status_code)
             raise self._parse_error(resp)
         data = resp.json()
         data["_latency_ms"] = round(latency_ms, 1)
+        self._report(
+            "create_reservation",
+            latency_ms,
+            code=data.get("confirmation_code"),
+            date=date,
+            time=time,
+        )
         return data
 
     async def search_reservations(
@@ -191,6 +210,11 @@ class ReservationClient:
             raise self._parse_error(resp)
         data = resp.json()
         data["_latency_ms"] = round(latency_ms, 1)
+        self._report(
+            "search_reservations",
+            latency_ms,
+            hits=len(data.get("results") or []),
+        )
         return data
 
     async def update_reservation(
@@ -220,6 +244,7 @@ class ReservationClient:
             raise self._parse_error(resp)
         data = resp.json()
         data["_latency_ms"] = round(latency_ms, 1)
+        self._report("update_reservation", latency_ms, id=reservation_id[:8])
         return data
 
     async def cancel_reservation(self, reservation_id: str) -> dict:
@@ -230,6 +255,7 @@ class ReservationClient:
             raise self._parse_error(resp)
         data = resp.json()
         data["_latency_ms"] = round(latency_ms, 1)
+        self._report("cancel_reservation", latency_ms, id=reservation_id[:8])
         return data
 
     async def handoff(
@@ -251,6 +277,7 @@ class ReservationClient:
             raise self._parse_error(resp)
         data = resp.json()
         data["_latency_ms"] = round(latency_ms, 1)
+        self._report("handoff", latency_ms, reason=reason[:40])
         return data
 
     async def reset(self) -> dict:

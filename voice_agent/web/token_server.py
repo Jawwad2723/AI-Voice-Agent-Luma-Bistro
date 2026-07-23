@@ -89,9 +89,11 @@ def create_token(body: TokenRequest):
 if __name__ == "__main__":
     import uvicorn
 
+    # Bind localhost so the browser is a secure context for getUserMedia.
+    # Open http://127.0.0.1:8080 (LAN IP / 0.0.0.0 will break the mic).
     uvicorn.run(
         "web.token_server:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8080,
         reload=False,
     )
