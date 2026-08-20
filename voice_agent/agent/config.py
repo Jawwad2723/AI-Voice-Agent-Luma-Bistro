@@ -112,8 +112,8 @@ def get_settings(*, require_voice_secrets: bool = True) -> Settings:
             "DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"
         ),
         eleven_api_key=eleven_api_key,
-        eleven_voice_id=_optional("ELEVEN_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
-        eleven_model_id=_optional("ELEVEN_MODEL_ID", "eleven_turbo_v2_5"),
+        eleven_voice_id=_optional("ELEVEN_VOICE_ID", "cgSgspJ2msm6clMCkdW9"),
+        eleven_model_id=_optional("ELEVEN_MODEL_ID", "eleven_v3"),
         twilio_account_sid=twilio_account_sid,
         twilio_auth_token=twilio_auth_token,
         twilio_phone_number=twilio_phone_number,

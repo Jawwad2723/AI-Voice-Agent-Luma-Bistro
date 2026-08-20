@@ -107,7 +107,7 @@ def validate_party_size(party_size: int) -> int:
 def validate_open_hours(date: str, time: str) -> None:
     dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M").replace(tzinfo=TZ)
     if dt.weekday() == 0:  # Monday
-        raise ValidationError("CLOSED", "Luma Bistro is closed on Mondays.")
+        raise ValidationError("CLOSED", "Bolt Voice Cafe is closed on Mondays.")
     minutes = dt.hour * 60 + dt.minute
     open_m, close_m = 17 * 60, 22 * 60
     if not (open_m <= minutes <= close_m):
