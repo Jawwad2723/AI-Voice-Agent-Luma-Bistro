@@ -78,7 +78,7 @@
 </head>
 <body>
   <main>
-    <h1>Luma Bistro</h1>
+    <h1>Bolt Bistro</h1>
     <p>Talk with the host to book, change, or cancel a table.</p>
     <button id="callBtn" type="button">Start conversation</button>
     <div id="status">Ready</div>
@@ -126,7 +126,6 @@
       setStatus("Requesting microphone…");
       remoteAudio.innerHTML = "";
 
-      // Ask for mic first so we fail before creating a LiveKit room/job
       const mic = await createLocalAudioTrack({
         echoCancellation: true,
         noiseSuppression: true,
@@ -156,7 +155,7 @@
         btn.textContent = "Start conversation";
         btn.classList.remove("connected");
         btn.disabled = false;
-        setStatus("Disconnected");
+        setStatus("Disconnected — WAV saved in voice_agent/recordings/");
         room = null;
       });
 
@@ -171,7 +170,7 @@
       btn.textContent = "End conversation";
       btn.classList.add("connected");
       btn.disabled = false;
-      setStatus("Connected — mic on. Waiting for host greeting…");
+      setStatus("Connected — agent is recording. Waiting for host greeting…");
     }
 
     async function disconnect() {

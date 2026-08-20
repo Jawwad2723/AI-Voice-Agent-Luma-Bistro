@@ -37,7 +37,7 @@ web/dist/
 web/.vite/
 
 # Test / demo artifacts
-recordings/
+recordings/*
+!recordings/.gitkeep
+!recordings/README.md
 demo/
-*.mp4
-*.webm

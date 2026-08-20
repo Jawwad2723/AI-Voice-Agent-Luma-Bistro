@@ -130,31 +130,17 @@ Never commit `.env`.
 
 ---
 
-## Run (3 terminals)
+## Run (one command)
 
-**A — Reservation API**
-
-```bash
-cd ../parse_voice_assessment_starter
-../voice_agent/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
-```
-
-**B — Agent worker**
+From the repo root:
 
 ```bash
-cd ../voice_agent && source .venv/bin/activate
-set -a; source .env; set +a
-python -m agent.main dev
+./start.sh
 ```
 
-**C — Browser UI**
+Creates `voice_agent/.venv` if needed, installs deps, then starts the reservation API, agent worker, and browser UI. Open **http://127.0.0.1:8080** (required for mic). Ctrl+C stops all three.
 
-```bash
-python -m web.token_server
-# Open http://127.0.0.1:8080  (required for mic)
-```
-
-Use `dev` for local demos (including barge-in). `start` is the production-style worker.
+Manual 3-terminal commands are in `COMMANDS.md`. Use `dev` for local demos (including barge-in).
 
 ---
 

@@ -14,9 +14,11 @@ from livekit.agents import (
     JobContext,
     WorkerOptions,
     cli,
+    get_job_context,
 )
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 
+from .call_recording import export_session_wav
 from .config import get_settings
 from .metrics import Metrics, highlight, setup_logging
 from .prompts import SYSTEM_PROMPT
@@ -120,8 +122,38 @@ async def entrypoint(ctx: JobContext) -> None:
                 name = name.name
             highlight(f"tool  {name or 'unknown'}")
 
-    # record=False: ignore LiveKit Cloud enable_recording
-    await session.start(agent=agent, room=ctx.room, record=False)
+    # Local WAV: RecorderIO captures caller + agent, then we export on close.
+    await session.start(
+        agent=agent,
+        room=ctx.room,
+        record={
+            "audio": True,
+            "traces": False,
+            "logs": False,
+            "transcript": False,
+        },
+    )
+
+    @session.on("close")
+    def _on_close(_ev) -> None:
+        try:
+            job = get_job_context(required=False)
+            session_dir = job.session_directory if job else None
+            if session_dir is None:
+                highlight("recording not saved (no session directory)")
+                return
+            path = export_session_wav(
+                room_name=ctx.room.name,
+                session_dir=session_dir,
+                session_id=session_id,
+            )
+            if path:
+                highlight(f"saved  {path}")
+                log.info("recording_saved path=%s", path)
+            else:
+                highlight("recording not saved (no audio.ogg)")
+        except Exception:
+            log.exception("failed to export WAV recording")
 
     await session.generate_reply(
         instructions=(

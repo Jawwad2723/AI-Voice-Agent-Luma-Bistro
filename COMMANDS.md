@@ -23,7 +23,19 @@ cp .env.example .env
 
 ---
 
-## Start everything (3 terminals)
+## Start everything (one command)
+
+From the repo root:
+
+```bash
+./start.sh
+```
+
+Creates the Python 3.12 venv if needed, installs deps, and starts the reservation API, agent worker, and browser UI. Open **http://127.0.0.1:8080**. Ctrl+C stops all three.
+
+---
+
+## Start everything (3 terminals, manual)
 
 ### Terminal A — Reservation API
 
